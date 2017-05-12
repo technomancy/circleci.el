@@ -1,0 +1,9 @@
+version: 2
+jobs:
+  build:
+    docker:
+      - image: silex/emacs:24.4
+    working_directory: ~/circleci.el
+    steps:
+      - checkout
+      - run: emacs --batch -l ert -l circleci.el -l circleci-tests.el -f ert-run-tests-batch-and-exit
