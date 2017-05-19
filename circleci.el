@@ -126,8 +126,10 @@ Call with prefix arg to prompt for project and branch interactively."
     (local-set-key (kbd "q") 'bury-buffer)
     (let (buffer-read-only)
       (delete-region (point-min) (point-max))
-      (dolist (step steps)
-        (circleci-add-step project step)))
+      (if (null steps)
+          (insert "No steps for this build.")
+        (dolist (step steps)
+          (circleci-add-step project step))))
     (setq buffer-read-only t)))
 
 (defun circleci-add-step (project step)
