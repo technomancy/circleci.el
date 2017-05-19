@@ -134,12 +134,11 @@ Call with prefix arg to prompt for project and branch interactively."
 
 (defun circleci-add-step (project step)
   (let ((actions (car (cdr (assoc 'actions step)))))
-    (insert-text-button (format "# %s" (cdr (assoc 'name actions)))
-                        'action (apply-partially 'circleci-step-action
-                                                 project step (point)))
+    (insert-text-button (format "# %s" (cdr (assoc 'name actions))) 'action
+                        (apply-partially 'circleci-step-action project step))
     (insert "\n\n")))
 
-(defun circleci-step-action (project step point button)
+(defun circleci-step-action (project step button)
   (let ((actions (car (cdr (assoc 'actions step)))))
     (when (and (cdr (assoc 'has_output actions))
                (cdr (assoc 'output_url actions)))
@@ -147,7 +146,7 @@ Call with prefix arg to prompt for project and branch interactively."
       (let (buffer-read-only) ; button disables itself
         (button-put button 'action 'ignore))
       (url-retrieve (cdr (assoc 'output_url actions))
-                    (apply-partially 'circleci-decompress-step project point)))))
+                    (apply-partially 'circleci-decompress-step project (point))))))
 
 (defun circleci-decompress-step (project point status)
   "Callback for fetching output for a specific step."
