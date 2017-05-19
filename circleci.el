@@ -151,7 +151,8 @@ Call with prefix arg to prompt for project and branch interactively."
 (defun circleci-decompress-step (project point status)
   "Callback for fetching output for a specific step."
   (let ((filename (make-temp-file "download" nil ".gz"))
-        (json-array-type 'list))
+        (json-array-type 'list)
+        (recentf-keep (list (lambda (_) nil))))
     (search-forward "\n\n")
     (write-region (point) (point-max) filename)
     (with-auto-compression-mode
