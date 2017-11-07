@@ -123,9 +123,9 @@ Call with prefix arg to prompt for project and branch interactively."
 (defun circleci-refresh-build-list ()
   "Refresh the list of builds."
   (interactive)
-  (url-retrieve circleci-build-url
+  (url-retrieve circleci-this-build-url
                 (apply-partially 'circleci--show-builds
-                                 circleci-build-url
+                                 circleci-this-build-url
                                  circleci-project
                                  (circleci--get-token))))
 
@@ -142,7 +142,7 @@ Call with prefix arg to prompt for project and branch interactively."
     (local-set-key (kbd "q") 'bury-buffer)
     (local-set-key (kbd "g") 'circleci-refresh-build-list)
     (set (make-local-variable 'circleci-project) project)
-    (set (make-local-variable 'circleci-build-url) url)
+    (set (make-local-variable 'circleci-this-build-url) url)
     (let (buffer-read-only)
       (delete-region (point-min) (point-max))
       (dolist (build builds)
