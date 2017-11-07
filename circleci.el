@@ -5,7 +5,7 @@
 
 ;; Author: Phil Hagelberg
 ;; URL: https://github.com/technomancy/circleci.el
-;; Version: 0.2.0
+;; Version: 0.2.1
 ;; Created: 2017-05-12
 ;; Keywords: convenience tools
 
@@ -208,11 +208,13 @@ Call with prefix arg to prompt for project and branch interactively."
     (error "Problem fetching build: %s" (buffer-substring 10 13)))
   (search-forward "\n\n")
   (let* ((json-array-type 'list)
-         (steps (cdr (assoc 'steps (json-read)))))
+         (build (json-read))
+         (steps (cdr (assoc 'steps build))))
     (switch-to-buffer (format "*circleci-output: %s*" project))
     (local-set-key (kbd "q") 'bury-buffer)
     (let (buffer-read-only)
       (delete-region (point-min) (point-max))
+      (circleci--insert-build project build (circleci--get-token))
       (if (null steps)
           (insert "No steps for this build.")
         (dolist (step steps)
