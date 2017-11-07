@@ -1,9 +1,11 @@
-# CircleCI for Emacs
+# CircleCI client for Emacs
 
-Gives you a buffer with a list build steps for any given build when
-you run `M-x circleci`. Press enter on a step to expand. Use `C-u M-x
-circleci` to have it prompt for a specific project and branch instead
-of infering from your `.git` directory.
+Running `M-x circleci` gives you a buffer with a list builds steps for
+any given project.  Press enter on a build to see steps, or press `g`
+to refresh.  Use `C-u M-x circleci` to have it prompt for a specific
+project and branch instead of infering from your `.git`
+directory. `M-x circleci-latest` takes you directly to the latest
+build for a project.
 
 It will prompt you for a CircleCI token and can save that token
 in `~/.authinfo.gpg` if you have your GPG key set up properly.
@@ -15,7 +17,8 @@ Note that this is not officially supported by CircleCI.
 To install, place it on your load-path and add an autoload:
 
     (add-to-list 'load-path "~/src/circleci.el")
-    (autoload 'circleci "circleci" "Show CI build output" t)
+    (autoload 'circleci "circleci" "List CircleCI builds" t)
+    (autoload 'circleci-latest "circleci" "Show CircleCI build output" t)
 
 No dependencies outside Emacs are required.
 

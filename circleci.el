@@ -5,7 +5,7 @@
 
 ;; Author: Phil Hagelberg
 ;; URL: https://github.com/technomancy/circleci.el
-;; Version: 0.1.0
+;; Version: 0.2.0
 ;; Created: 2017-05-12
 ;; Keywords: convenience tools
 
@@ -13,10 +13,12 @@
 
 ;;; Commentary:
 
-;; Gives you a buffer with a list build steps for any given
-;; build. Press enter on a step to expand. Use C-u M-x circleci to
-;; have it prompt for a specific project and branch instead of
-;; infering from your .git directory.
+;; Gives you a buffer with a list builds steps for any given project.
+;; Press enter on a build to see steps, or press g to refresh.  Use
+;; C-u M-x circleci to have it prompt for a specific project and
+;; branch instead of infering from your .git directory. M-x
+;; circleci-latest takes you directly to the latest build for a
+;; project.
 
 ;; It will prompt you for a CircleCI token and can save that token
 ;; in ~/.authinfo.gpg if you have your GPG key set up properly.
@@ -54,42 +56,27 @@
 (require 'json)
 (require 'vc-git)
 
-(defvar circleci-list-url
+(defvar circleci-list-branch-url
   "https://circleci.com/api/v1.1/project/github/%s/tree/%s?circle-token=%s")
 (defvar circleci-build-url
   "https://circleci.com/api/v1/project/%s/%s?circle-token=%s")
 
 (defvar circleci-last-project nil)
 
-;;;###autoload
-(defun circleci (query?)
-  "Show build output for the latest CircleCI build of the current branch.
-
-Call with prefix arg to prompt for project and branch interactively."
-  (interactive "p")
+(defun circleci--get-token ()
   (let* ((auth-sources '("~/.authinfo.gpg"))
          (secret-spec (car (auth-source-search :host "circleci.com" :user "none"
                                                :create t :type 'netrc)))
          (token (funcall (plist-get secret-spec :secret)))
          (save-fn (plist-get secret-spec :save-function)))
     (when save-fn (funcall save-fn))
-    (let ((url-request-extra-headers '(("Accept" . "application/json")))
-          (project (if (= 1 query?)
-                       (circleci-get-project)
-                     (circleci-read-project)))
-          (branch (if (= 1 query?)
-                      (car (vc-git-branches))
-                    (read-from-minibuffer "Branch: " nil nil nil nil
-                                          (car (vc-git-branches))))))
-      (setq circleci-last-project project)
-      (url-retrieve (format circleci-list-url project branch token)
-                    (apply-partially 'circleci-process-builds project token)))))
+    token))
 
-(defun circleci-read-project ()
+(defun circleci--read-project ()
   (read-from-minibuffer "Organization/project: " nil nil nil nil
                         circleci-last-project))
 
-(defun circleci-get-project ()
+(defun circleci--get-project ()
   (with-temp-buffer
     (condition-case nil
         (progn
@@ -99,7 +86,87 @@ Call with prefix arg to prompt for project and branch interactively."
           (match-string 1))
       (error (circleci-read-project)))))
 
-(defun circleci-process-builds (project token status)
+(defun circleci--request-for-project-and-branch (query? url callback)
+  (let* ((token (circleci--get-token))
+         (url-request-extra-headers '(("Accept" . "application/json")))
+         (project (if query?
+                      (or circleci-last-project
+                          (circleci--get-project))
+                    (circleci--read-project)))
+         (branch (if query?
+                     (car (vc-git-branches))
+                   (completing-read "Branch: " (vc-git-branches))))
+         (url (format url project branch token)))
+    (setq circleci-last-project project)
+    (url-retrieve url (apply-partially callback url project token))))
+
+;;;###autoload
+(defun circleci-latest (query)
+  "Show build output for the latest CircleCI build of the current branch.
+
+Call with prefix arg to prompt for project and branch interactively."
+  (interactive "p")
+  (circleci--request-for-project-and-branch (= 1 query)
+                                            circleci-list-branch-url
+                                            'circleci--process-builds))
+
+;;;###autoload
+(defun circleci (query)
+  "Show list of builds for the CircleCI project.
+
+Call with prefix arg to prompt for project and branch interactively."
+  (interactive "p")
+  (circleci--request-for-project-and-branch (= 1 query)
+                                            circleci-list-branch-url
+                                            'circleci--show-builds))
+
+(defun circleci-refresh-build-list ()
+  "Refresh the list of builds."
+  (interactive)
+  (url-retrieve circleci-build-url
+                (apply-partially 'circleci--show-builds
+                                 circleci-build-url
+                                 circleci-project
+                                 (circleci--get-token))))
+
+(defun circleci--show-builds (url project token _status)
+  "Callback for build listing response."
+  (goto-char (point-min))
+  (when (not (search-forward "HTTP/1.1 200" nil t))
+    ;; pull HTTP status out of response
+    (error "Problem fetching builds: %s" (buffer-substring 10 13)))
+  (search-forward "\n\n")
+  (let* ((json-array-type 'list)
+        (builds (json-read)))
+    (switch-to-buffer (format "*circleci-builds: %s*" project))
+    (local-set-key (kbd "q") 'bury-buffer)
+    (local-set-key (kbd "g") 'circleci-refresh-build-list)
+    (set (make-local-variable 'circleci-project) project)
+    (set (make-local-variable 'circleci-build-url) url)
+    (let (buffer-read-only)
+      (delete-region (point-min) (point-max))
+      (dolist (build builds)
+        (circleci--insert-build project build token)))
+    (goto-char (point-min))
+    (setq buffer-read-only t)))
+
+(defun circleci--insert-build (project build token)
+  (let* ((job-name (or (cdr (assoc 'job_name (cdr (assoc 'workflows build))))
+                       (cdr (assoc 'job_name build))
+                       "job"))
+         (build-num (cdr (assoc 'build_num build)))
+         (subject (cdr (assoc 'subject build)))
+         (status (cdr (assoc 'status build)))
+         (label (format "#%s %s" build-num job-name)))
+    (insert-text-button label 'action (apply-partially 'circleci--build-action
+                                                       project build-num token))
+    (insert (format " [%s]\n%s\n\n" status subject))))
+
+(defun circleci--build-action (project build-num token button)
+  (url-retrieve (format circleci-build-url project build-num token)
+                (apply-partially 'circleci-process-build project)))
+
+(defun circleci--process-builds (_url project token _status)
   "Callback for build listing response."
   (goto-char (point-min))
   (when (not (search-forward "HTTP/1.1 200" nil t))
@@ -112,6 +179,8 @@ Call with prefix arg to prompt for project and branch interactively."
     (message "Retrieving build #%s" build-num)
     (url-retrieve (format circleci-build-url project build-num token)
                   (apply-partially 'circleci-process-build project))))
+
+;;; handling a single build
 
 (defun circleci-process-build (project status)
   "Callback for overall individual build response."
@@ -130,6 +199,7 @@ Call with prefix arg to prompt for project and branch interactively."
           (insert "No steps for this build.")
         (dolist (step steps)
           (circleci-add-step project step))))
+    (goto-char (point-min))
     (setq buffer-read-only t)))
 
 (defun circleci-add-step (project step)
@@ -164,6 +234,8 @@ Call with prefix arg to prompt for project and branch interactively."
               (goto-char point)
               (end-of-line)
               (insert "\n\n")
+              ;; TODO: should call ansi-color-apply here, but it truncates
+              ;; the string and throws data away
               (insert (cdr (assoc 'message msg)))
               (save-excursion
                 (goto-char (point-min))
