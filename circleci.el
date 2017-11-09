@@ -30,7 +30,8 @@
 ;; To install, place it on your load-path and add an autoload:
 
 ;; (add-to-list 'load-path "~/src/circleci.el")
-;; (autoload 'circleci "circleci" "Show CI build output" t)
+;; (autoload 'circleci "circleci" "List CircleCI builds" t)
+;; (autoload 'circleci-latest "circleci" "Show CircleCI build output" t)
 
 ;; NB. Visiting a specific build from the list doesn't work on 1.0 builds.
 
@@ -86,7 +87,7 @@
           (goto-char (point-min))
           (search-forward-regexp "github.com[:/]\\(.+?\\)\\(\\.git\\)")
           (match-string 1))
-      (error (circleci-read-project)))))
+      (error (circleci--read-project)))))
 
 (defun circleci--request-for-project-and-branch (query? url callback)
   (let* ((token (circleci--get-token))
