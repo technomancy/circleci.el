@@ -5,7 +5,7 @@
 
 ;; Author: Phil Hagelberg
 ;; URL: https://github.com/technomancy/circleci.el
-;; Version: 0.2.1
+;; Version: 0.2.2
 ;; Created: 2017-05-12
 ;; Keywords: convenience tools
 
@@ -31,6 +31,8 @@
 
 ;; (add-to-list 'load-path "~/src/circleci.el")
 ;; (autoload 'circleci "circleci" "Show CI build output" t)
+
+;; NB. Visiting a specific build from the list doesn't work on 1.0 builds.
 
 ;;; License:
 
@@ -164,7 +166,7 @@ Call with prefix arg to prompt for project and branch interactively."
   (let ((color (cdr (assoc status circleci--status-colors))))
     (if color
         (propertize status 'font-lock-face (list :foreground color))
-      status)))
+      (or status "unknown-status"))))
 
 (defun circleci--insert-build (project build token)
   (let* ((job-name (or (cdr (assoc 'job_name (cdr (assoc 'workflows build))))
@@ -172,13 +174,20 @@ Call with prefix arg to prompt for project and branch interactively."
          (build-num (cdr (assoc 'build_num build)))
          (subject (cdr (assoc 'subject build)))
          (status (cdr (assoc 'status build)))
-         (label (if job-name
-                    (format "#%s %s" build-num job-name)
-                  (format "#%s" build-num))))
-    (insert-text-button label 'action (apply-partially 'circleci--build-action
-                                                       project build-num token))
-    (insert " " (circleci--colored-status status)
-            (format "\n%s\n\n" subject))))
+         (sha (cdr (assoc 'vcs_revision build)))
+         (sha (substring (or sha "unknown?") 0 8))
+         (compare-url (cdr (assoc 'compare build)))
+         (build-url (cdr (assoc 'build_url build)))
+         (num (if job-name
+                  (format "#%s %s" build-num job-name)
+                (format "#%s" build-num))))
+    (insert-text-button num 'action (apply-partially 'circleci--build-action
+                                                     project build-num token))
+    (insert " " (circleci--colored-status status) " ")
+    (insert-text-button "⥀" 'action (apply-partially 'browse-url build-url))
+    (insert "\n")
+    (insert-text-button sha 'action (apply-partially 'browse-url compare-url))
+    (insert (format " %s\n\n" (or subject "unknown commit message")))))
 
 (defun circleci--build-action (project build-num token button)
   (url-retrieve (format circleci-build-url project build-num token)
