@@ -24,6 +24,6 @@ No dependencies outside Emacs are required.
 
 ## Copyright
 
-Copyright © 2017 Phil Hagelberg and contributors
+Copyright © 2017-2018 Phil Hagelberg and contributors
 
 Licensed under the same license as Emacs (GPL v3 or later)
